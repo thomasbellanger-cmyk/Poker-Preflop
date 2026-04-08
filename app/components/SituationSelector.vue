@@ -14,16 +14,16 @@ const emit = defineEmits<{
   'update:spot': [value: string]
 }>()
 
-const stackOptions = [
-  { label: '15bb (12–15bb)', value: 15 },
-  { label: '10bb (8–11bb)', value: 10 },
-  { label: '7bb (≤7bb)', value: 7 }
+const stackItems = [
+  { label: '15bb', value: 15 },
+  { label: '10bb', value: 10 },
+  { label: '7bb', value: 7 }
 ]
 
-const positionOptions = [
-  { label: 'BTN (Bouton)', value: 'BTN' as Position },
-  { label: 'SB (Small Blind)', value: 'SB' as Position },
-  { label: 'BB (Big Blind)', value: 'BB' as Position }
+const positionItems = [
+  { label: 'BTN', value: 'BTN' as Position },
+  { label: 'SB', value: 'SB' as Position },
+  { label: 'BB', value: 'BB' as Position }
 ]
 
 const spotItems = computed(() =>
@@ -34,22 +34,24 @@ const spotItems = computed(() =>
 <template>
   <div class="space-y-4">
     <UFormField label="Stack effectif (BB)">
-      <USelect
+      <UTabs
         :model-value="stackBb"
-        :items="stackOptions"
-        value-key="value"
+        :items="stackItems"
+        variant="pill"
+        :content="false"
         class="w-full"
-        @update:model-value="emit('update:stackBb', $event)"
+        @update:model-value="emit('update:stackBb', Number($event) as StackBB)"
       />
     </UFormField>
 
     <UFormField label="Position">
-      <USelect
+      <UTabs
         :model-value="position"
-        :items="positionOptions"
-        value-key="value"
+        :items="positionItems"
+        variant="pill"
+        :content="false"
         class="w-full"
-        @update:model-value="emit('update:position', $event)"
+        @update:model-value="emit('update:position', $event as Position)"
       />
     </UFormField>
 

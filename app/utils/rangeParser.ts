@@ -1,4 +1,4 @@
-const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'] as const
+export const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'] as const
 type Rank = typeof RANKS[number]
 
 function rankIndex(rank: string): number {
@@ -18,7 +18,9 @@ export function parseHand(hand: string): ParsedHand | null {
   const match = trimmed.match(/^([AKQJT2-9])([AKQJT2-9])([SO]?)$/)
   if (!match) return null
 
-  const [, r1, r2, suffix] = match
+  const r1 = match[1]!
+  const r2 = match[2]!
+  const suffix = match[3] ?? ''
   const idx1 = rankIndex(r1)
   const idx2 = rankIndex(r2)
 
@@ -48,7 +50,9 @@ export function normalizeHandInput(input: string): string {
   const match = trimmed.match(/^([AKQJT2-9])([AKQJT2-9])([SO]?)$/)
   if (!match) return trimmed
 
-  const [, r1, r2, suffix] = match
+  const r1 = match[1]!
+  const r2 = match[2]!
+  const suffix = match[3] ?? ''
   const idx1 = rankIndex(r1)
   const idx2 = rankIndex(r2)
 
@@ -79,9 +83,9 @@ function matchesRangePlus(hand: ParsedHand, basePattern: string): boolean {
 }
 
 function matchesRangeDash(hand: ParsedHand, pattern: string): boolean {
-  const [startStr, endStr] = pattern.split('-').map(s => s.trim())
-  const start = parseHand(startStr)
-  const end = parseHand(endStr)
+  const parts = pattern.split('-').map(s => s.trim())
+  const start = parseHand(parts[0]!)
+  const end = parseHand(parts[1]!)
   if (!start || !end) return false
 
   if (start.type !== end.type) return false

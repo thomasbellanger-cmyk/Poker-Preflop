@@ -1,7 +1,7 @@
 import type { StackBB, Position, Action, RangeResult } from '~/types/range'
 import { ACTION_PRIORITY } from '~/types/range'
 import { getRangesForSituation, getSpotsForSituation } from '~/repositories/ranges'
-import { belongsToRange, normalizeHandInput, isValidHand } from '~/utils/rangeParser'
+import { belongsToRange, normalizeHandInput, isValidHand, RANKS } from '~/utils/rangeParser'
 
 function resolveActionType(actionText: string): Action {
   const lower = actionText.toLowerCase()
@@ -29,6 +29,26 @@ export function useRanges() {
   const spot = ref('')
   const handInput = ref('')
 
+  // Restaurer les préférences depuis localStorage (côté client uniquement)
+  if (import.meta.client) {
+    const savedStack = localStorage.getItem('nitro-stack')
+    if (savedStack && [15, 10, 7].includes(Number(savedStack))) {
+      stackBb.value = Number(savedStack) as StackBB
+    }
+    const savedPosition = localStorage.getItem('nitro-position')
+    if (savedPosition && ['BTN', 'SB', 'BB'].includes(savedPosition)) {
+      position.value = savedPosition as Position
+    }
+  }
+
+  // Persister les changements
+  watch(stackBb, (v) => {
+    if (import.meta.client) localStorage.setItem('nitro-stack', String(v))
+  })
+  watch(position, (v) => {
+    if (import.meta.client) localStorage.setItem('nitro-position', v)
+  })
+
   const normalizedHand = computed(() => normalizeHandInput(handInput.value))
   const isHandValid = computed(() => isValidHand(handInput.value))
 
@@ -39,7 +59,7 @@ export function useRanges() {
   // Initialiser le spot au premier disponible
   watch(availableSpots, (spots) => {
     if (spots.length > 0 && !spots.includes(spot.value)) {
-      spot.value = spots[0]
+      spot.value = spots[0]!
     }
   }, { immediate: true })
 
@@ -96,6 +116,61 @@ export function useRanges() {
     results.value = deduplicated
   }
 
+  // Matrice 13x13 : label de chaque cellule
+  function getHandLabel(row: number, col: number): string {
+    if (row === col) return `${RANKS[row]}${RANKS[col]}`
+    if (row < col) return `${RANKS[row]}${RANKS[col]}s`
+    return `${RANKS[col]}${RANKS[row]}o`
+  }
+
+  // Action prioritaire pour une main donnée dans la situation courante
+  function getActionForHand(hand: string): Action {
+    const normalized = normalizeHandInput(hand)
+    const entries = getRangesForSituation(stackBb.value, position.value, spot.value)
+
+    let bestAction: Action = 'fold'
+    let bestPriority = 0
+
+    for (const entry of entries) {
+      if (!entry.hands) continue
+      if (belongsToRange(normalized, entry.hands)) {
+        const actionType = resolveActionType(entry.action)
+        if (ACTION_PRIORITY[actionType] > bestPriority) {
+          bestAction = actionType
+          bestPriority = ACTION_PRIORITY[actionType]
+        }
+      }
+    }
+
+    return bestAction
+  }
+
+  // Matrice 13x13 des actions pour la situation courante
+  const matrixActions = computed(() => {
+    const matrix: Action[][] = []
+    for (let row = 0; row < 13; row++) {
+      matrix[row] = []
+      for (let col = 0; col < 13; col++) {
+        const hand = getHandLabel(row, col)
+        matrix[row]![col] = getActionForHand(hand)
+      }
+    }
+    return matrix
+  })
+
+  // Auto-submit : déclenche findDecision() dès que la main est valide
+  watch(
+    [stackBb, position, spot, normalizedHand, isHandValid],
+    () => {
+      if (isHandValid.value && handInput.value.trim()) {
+        findDecision()
+      } else {
+        results.value = []
+        noResult.value = false
+      }
+    }
+  )
+
   return {
     stackBb,
     position,
@@ -106,6 +181,8 @@ export function useRanges() {
     availableSpots,
     results,
     noResult,
-    findDecision
+    findDecision,
+    matrixActions,
+    getHandLabel
   }
 }
