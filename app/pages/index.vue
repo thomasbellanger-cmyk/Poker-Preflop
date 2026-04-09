@@ -10,8 +10,36 @@ const {
   results,
   noResult,
   matrixActions,
-  getHandLabel
+  getHandLabel,
+  nextHand,
+  gameStarted,
+  startGame,
+  endGame,
+  liveConnected,
+  connectLive,
+  disconnectLive
 } = useRanges()
+
+const toast = useToast()
+
+function toggleLive(): void {
+  if (liveConnected.value) {
+    disconnectLive()
+    toast.add({
+      title: 'Winamax déconnecté',
+      icon: 'i-lucide-unplug',
+      color: 'neutral'
+    })
+  } else {
+    connectLive()
+    toast.add({
+      title: 'Winamax connecté',
+      description: 'Détection automatique des mains activée',
+      icon: 'i-lucide-plug',
+      color: 'success'
+    })
+  }
+}
 </script>
 
 <template>
@@ -20,9 +48,39 @@ const {
       <h1 class="text-3xl font-bold text-center mb-1">
         Nitro Ranges
       </h1>
-      <p class="text-center text-gray-500 mb-6">
+      <p class="text-center text-gray-500 mb-4">
         Outil de décision preflop poker
       </p>
+
+      <div class="flex flex-wrap items-center justify-center gap-3 mb-6">
+        <UButton
+          :color="liveConnected ? 'success' : 'neutral'"
+          :variant="liveConnected ? 'soft' : 'outline'"
+          :icon="liveConnected ? 'i-lucide-radio' : 'i-lucide-radio-tower'"
+          size="sm"
+          @click="toggleLive"
+        >
+          {{ liveConnected ? 'Winamax connecté' : 'Connecter Winamax' }}
+        </UButton>
+
+        <UBadge
+          :color="liveConnected ? 'success' : 'neutral'"
+          :variant="liveConnected ? 'subtle' : 'outline'"
+          size="md"
+          :icon="liveConnected ? 'i-lucide-plug' : 'i-lucide-unplug'"
+        >
+          Winamax : {{ liveConnected ? 'connecté' : 'déconnecté' }}
+        </UBadge>
+
+        <UBadge
+          :color="gameStarted ? 'primary' : 'neutral'"
+          :variant="gameStarted ? 'subtle' : 'outline'"
+          size="md"
+          :icon="gameStarted ? 'i-lucide-play-circle' : 'i-lucide-pause-circle'"
+        >
+          Partie : {{ gameStarted ? 'en cours' : 'pas commencée' }}
+        </UBadge>
+      </div>
 
       <div class="flex flex-col lg:flex-row gap-8">
         <!-- Colonne gauche : situation + matrice -->
@@ -32,6 +90,7 @@ const {
             v-model:position="position"
             v-model:spot="spot"
             :available-spots="availableSpots"
+            :game-started="gameStarted"
           />
 
           <HandMatrix
@@ -60,6 +119,43 @@ const {
               :is-primary="index === 0"
             />
           </div>
+
+          <UButton
+            v-if="!gameStarted"
+            block
+            size="xl"
+            color="primary"
+            icon="i-lucide-play"
+            class="mt-6"
+            @click="startGame"
+          >
+            Commencer la partie
+          </UButton>
+
+          <template v-else>
+            <UButton
+              block
+              size="xl"
+              color="primary"
+              icon="i-lucide-arrow-right"
+              class="mt-6"
+              @click="nextHand"
+            >
+              Main suivante
+            </UButton>
+
+            <UButton
+              block
+              size="sm"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-square"
+              class="mt-2"
+              @click="endGame"
+            >
+              Terminer la partie
+            </UButton>
+          </template>
         </div>
       </div>
     </div>

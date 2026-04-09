@@ -6,6 +6,7 @@ const props = defineProps<{
   position: Position
   spot: string
   availableSpots: string[]
+  gameStarted: boolean
 }>()
 
 const emit = defineEmits<{
@@ -29,6 +30,7 @@ const positionItems = [
 const spotItems = computed(() =>
   props.availableSpots.map(s => ({ label: s, value: s }))
 )
+
 </script>
 
 <template>
@@ -46,6 +48,7 @@ const spotItems = computed(() =>
 
     <UFormField label="Position">
       <UTabs
+        v-if="!gameStarted"
         :model-value="position"
         :items="positionItems"
         variant="pill"
@@ -53,15 +56,24 @@ const spotItems = computed(() =>
         class="w-full"
         @update:model-value="emit('update:position', $event as Position)"
       />
+      <div
+        v-else
+        class="flex items-center justify-center px-4 py-3 rounded-lg bg-primary-100 dark:bg-primary-950 border border-primary-300 dark:border-primary-800"
+      >
+        <span class="text-2xl font-bold text-primary-700 dark:text-primary-300">
+          {{ position }}
+        </span>
+      </div>
     </UFormField>
 
     <UFormField label="Spot">
-      <USelect
+      <UTabs
         :model-value="spot"
         :items="spotItems"
-        value-key="value"
+        variant="pill"
+        :content="false"
         class="w-full"
-        @update:model-value="emit('update:spot', $event)"
+        @update:model-value="emit('update:spot', String($event))"
       />
     </UFormField>
   </div>

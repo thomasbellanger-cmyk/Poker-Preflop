@@ -3,6 +3,12 @@ import { ACTION_PRIORITY } from '~/types/range'
 import { getRangesForSituation, getSpotsForSituation } from '~/repositories/ranges'
 import { belongsToRange, normalizeHandInput, isValidHand, RANKS } from '~/utils/rangeParser'
 
+const POSITION_ROTATION: Record<Position, Position> = {
+  'BTN': 'SB',
+  'SB': 'BB',
+  'BB': 'BTN'
+}
+
 function resolveActionType(actionText: string): Action {
   const lower = actionText.toLowerCase()
   if (lower.startsWith('call')) return 'call'
@@ -28,6 +34,10 @@ export function useRanges() {
   const position = ref<Position>('BTN')
   const spot = ref('')
   const handInput = ref('')
+  const gameStarted = ref(false)
+  // True quand la table est passée en heads-up (2 joueurs restants). Détecté via
+  // la prédiction live Winamax. Permet de filtrer les spots non pertinents en HU.
+  const isHeadsUp = ref(false)
 
   // Restaurer les préférences depuis localStorage (côté client uniquement)
   if (import.meta.client) {
@@ -52,9 +62,29 @@ export function useRanges() {
   const normalizedHand = computed(() => normalizeHandInput(handInput.value))
   const isHandValid = computed(() => isValidHand(handInput.value))
 
-  const availableSpots = computed(() =>
-    getSpotsForSituation(stackBb.value, position.value)
-  )
+  const availableSpots = computed(() => {
+    const all = getSpotsForSituation(stackBb.value, position.value)
+    if (!isHeadsUp.value) return all
+    // En heads-up, on masque les spots qui supposent un 3e joueur (BTN ou SB
+    // actif en plus de hero). On garde uniquement les spots équivalents HU.
+    if (position.value === 'SB') {
+      // 10/15bb utilisent "SB first-in (BTN fold)", 7bb utilise "SB first-in".
+      // On garde la première variante disponible.
+      const preferred = ['SB first-in (BTN fold)', 'SB first-in']
+      return preferred.filter(s => all.includes(s))
+    }
+    if (position.value === 'BB') {
+      // 10/15bb : "BB vs BTN open (SB fold)", 7bb : "BB vs BTN open".
+      // "BB vs shove" existe à tous les stacks et reste en second onglet.
+      const preferred = [
+        'BB vs BTN open (SB fold)',
+        'BB vs BTN open',
+        'BB vs shove'
+      ]
+      return preferred.filter(s => all.includes(s))
+    }
+    return all
+  })
 
   // Initialiser le spot au premier disponible
   watch(availableSpots, (spots) => {
@@ -158,6 +188,27 @@ export function useRanges() {
     return matrix
   })
 
+  // Passe à la main suivante : rotation de position (BTN→SB→BB→BTN) + reset input
+  function nextHand(): void {
+    position.value = POSITION_ROTATION[position.value]
+    handInput.value = ''
+  }
+
+  // Démarre une partie : verrouille la position, prête pour la première main
+  function startGame(): void {
+    gameStarted.value = true
+    // Un nouveau sit&go démarre toujours à 3 joueurs
+    isHeadsUp.value = false
+    handInput.value = ''
+  }
+
+  // Termine la partie : déverrouille la position pour pouvoir la rééditer
+  function endGame(): void {
+    gameStarted.value = false
+    isHeadsUp.value = false
+    handInput.value = ''
+  }
+
   // Auto-submit : déclenche findDecision() dès que la main est valide
   watch(
     [stackBb, position, spot, normalizedHand, isHandValid],
@@ -171,6 +222,45 @@ export function useRanges() {
     }
   )
 
+  // === Intégration live Winamax (lecture hand history en temps réel) ===
+  const {
+    connected: liveConnected,
+    lastPrediction,
+    lastGameStarted,
+    lastError: liveError,
+    connect: connectLive,
+    disconnect: disconnectLive
+  } = useLiveHand()
+
+  // Nouvelle game détectée → auto-start si pas déjà démarrée
+  watch(lastGameStarted, (tournamentId) => {
+    if (tournamentId && !gameStarted.value) {
+      startGame()
+    }
+  })
+
+  // Nouvelle main détectée → pré-remplir stack + position
+  watch(lastPrediction, (prediction) => {
+    if (!prediction) return
+
+    // Si hero éliminé, on termine la partie
+    if (prediction.heroEliminated) {
+      endGame()
+      return
+    }
+
+    // Détection HU (2 joueurs restants) : filtre les spots pertinents et
+    // force le bon spot par défaut via le watcher sur availableSpots.
+    isHeadsUp.value = !prediction.threeHanded
+
+    // Position et stack mis à jour en 3-max comme en heads-up.
+    // En HU, la prédiction mappe BTN→SB (même dynamique first-in contre BB).
+    position.value = prediction.nextPosition
+    stackBb.value = prediction.nextStackBb
+    // Reset de l'input pour la nouvelle main
+    handInput.value = ''
+  })
+
   return {
     stackBb,
     position,
@@ -182,7 +272,15 @@ export function useRanges() {
     results,
     noResult,
     findDecision,
+    nextHand,
+    gameStarted,
+    startGame,
+    endGame,
     matrixActions,
-    getHandLabel
+    getHandLabel,
+    liveConnected,
+    liveError,
+    connectLive,
+    disconnectLive
   }
 }
